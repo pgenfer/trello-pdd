@@ -1,10 +1,12 @@
 ﻿using System;
 using static System.Console;
 using System.IO;
-using System.Linq;
-using TaskList = System.Collections.Generic.Dictionary<string, trello_pdd.Task>;
-using System.Text.RegularExpressions;
+using System.Reflection;
 using System.Collections.Generic;
+using System.Net.Http;
+using Newtonsoft.Json.Linq;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace trello_pdd
 {
@@ -19,17 +21,14 @@ namespace trello_pdd
             if(!File.Exists(ConfigFileName))
             {
                 WriteLine("No configuration file found, please enter configuration data");
-                Write("BoardName: ");
-                configuration.BoardName = ReadLine();
-                Write("API-Token: ");
-                configuration.ApiToken = ReadLine();
-                Write("Source Folder: ");
-                configuration.SourceFolder = ReadLine();
-                while(!Directory.Exists(configuration.SourceFolder))
+                foreach(var property in configuration.GetType().GetProperties(
+                    BindingFlags.Public|BindingFlags.Instance))
                 {
-                    Write($"Source folder {configuration.SourceFolder} does not exist, please enter new one: ");
-                    configuration.SourceFolder = ReadLine();
+                    Write($"{property.Name}: ");
+                    var value = ReadLine();
+                    property.SetValue(configuration, value);
                 }
+
                 WriteLine("Saving configuration");
                 configuration.WriteToFile(ConfigFileName);
             }
@@ -42,141 +41,180 @@ namespace trello_pdd
                 }
             }
 
+            if (!Directory.Exists(configuration.SourceFolder))
+            {
+                Console.WriteLine($"Source folder '{configuration.SourceFolder}' not found. Exiting application.");
+                return;
+            }
+
             var parser = new SourceParser();
             var tasks = parser.ParseSource(configuration.SourceFolder);
 
-            /// TODO 1: Connect to Trello
-            /// Use API Token to connect to Trello and request all Tasks from there.
-            /// After that check if new tasks should be created.
-
-            /// TODO 1: Add new task to Trello
-            /// Create a new task and add it to the Trello Board.
-
-
-
-            // TODO:
-            // 1. Load configuration data from file,
-            //      - name of trello board
-            //      - API Token
-            //      - Folder with source files
-            // 2. Parse source files, search for /// TODO <number> <task title>
-            // 3. When TODO line found, search for all directly following lines with ///
-            //      these are the additional comments for the tasks
-            //      - create internal list with tasks
-            // 4. Add new tasks to trello
-            //      - Get list of all available tasks
-            //      - Search for tasks with given number
-            //      - Check if task already has related tasks with given title
-            //      - If not, create  new tasks and add them as attachements to parent task
-            // 5. Optional: If all subtasks of a task are done, ask user to also set the parent task to done (recursivly for additional parent tasks?)
-            // 6. Optional: If there is an open subtask, but no TODO entry any more and also no more related subtasks, close the task
-
-        }
-    }
-
-    public class Configuration
-    {
-        public string ApiToken { get; set; }
-        public string BoardName { get; set; }
-        public string SourceFolder { get; set; }
-
-        public void WriteToFile(string fileName)
-        {
-            File.WriteAllLines(fileName, new string[]
+            var trelloConnection = new TrelloConnector(configuration.ApiKey, configuration.ApiToken);
+            var boardId = trelloConnection.GetBoardByName(configuration.UserId, configuration.BoardName);
+            if (boardId == null)
+                return;
+            var cards = trelloConnection.GetCardsOfBoard(boardId);
+            // only load attachements for cards for which we will have to add subtasks
+            var parentIds = tasks.Select(x => x.ParentNumber).Distinct();
+            var parentCards = cards.Where(x => parentIds.Contains(x.Number));
+            var subTasksToCreate = new List<Task>();
+            foreach(var parentCard in parentCards)
             {
-                $"{nameof(ApiToken)}={ApiToken}",
-                $"{nameof(BoardName)}={BoardName}",
-                $"{nameof(SourceFolder)}={SourceFolder}"
-            });
-        }
-
-        public bool ReadFromFile(string fileName)
-        {
-            try
-            {
-                var content = File.ReadAllLines(fileName);
-                foreach(var line in content.Select(x => x.Split('=')))
+                var attachments = trelloConnection.GetAttachmentUrlsForCard(parentCard.Id);
+                // check if there is an attachment which has the same name as 
+                // one of our sub tasks, if yes, the subtask is already generated
+                var subTasks = tasks.Where(x => x.ParentNumber == parentCard.Number);
+                foreach(var subTask in subTasks)
                 {
-                    if(line.Length == 2)
+                    var alreadyLinked = false;
+                    foreach(var attachment in attachments)
                     {
-                        var key = line[0];
-                        var value = line[1];
-                        GetType().GetProperty(key).SetValue(this, value);
+                        if(string.Compare(
+                            attachment.Title,
+                            subTask.TitleWithoutWhiteSpace,true) == 0)
+                        {
+                            alreadyLinked = true;
+                            break;
+                        }
+                    }
+                    if(!alreadyLinked)
+                    {
+                        subTasksToCreate.Add(subTask);
                     }
                 }
-                return true;
             }
-            catch(Exception ex)
-            {
-                WriteLine($"Could not read configuration: {ex}");
-                return false;
-            }
+
+            // subtask list contains all tasks that should be created and added to trello
+            // create a new card in trello now and add it as attachment to the parent card.
+
+            /// TODO 6: Batch Modus für Lesen der Attachments verwenden
+            /// TODO 6: Karten für Subtasks in Trello generieren
+
+
+            return;
+            
+
+
         }
     }
 
-    public class Task
+    public class Attachment
     {
-        public int ParentNumber { get; set; }
-        public string Title { get; set; }
-        public List<string> Description { get; } = new List<string>();
-        public string DescriptionText => string.Join(" ",Description);
-    }
-
-
-
-    public class SourceParser
-    {
-        private readonly Regex TaskBeginRegEx = 
-            new Regex(@"(\s*)\/\/\/(\s*)TODO(\s*)(\d+):(\s*)(.*)(\s*)",
+        private readonly Regex TitleRegex = 
+            new Regex(@"s*https:\/\/trello\.com\/c\/[a-zA-Z0-9]*\/\d*-(.*)",
                       RegexOptions.Compiled|RegexOptions.IgnoreCase);
-        private readonly Regex TaskDescriptionRegEx =
-            new Regex(@"(\s*)\/\/\/(\s*)(.*)(\s*)",
-                      RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-        public TaskList ParseSource(string sourceFolder)
+        public string Url { get; set; }
+        public string Title { get; private set; }
+        public Attachment(string url)
         {
-            var taskList = new TaskList();
-            Task currentTask = null;
-            // iterate over all source files (currently, we only regard *.cs und *.ts files)
-            var sourceFiles =
-                Directory.GetFiles(sourceFolder, "*.cs", SearchOption.AllDirectories)
-                         .ToList();
-            sourceFiles.AddRange(
-                Directory.GetFiles(sourceFolder, "*.ts", SearchOption.AllDirectories));
-            foreach (var sourceFile in sourceFiles)
+            Url = url;
+            var match = TitleRegex.Match(url);
+            if(match.Success)
             {
-                var sourceLines = File.ReadLines(sourceFile).ToList();
-                foreach (var sourceLine in sourceLines)
-                {
-                    // first line of task was found, create new task object
-                    var taskBeginMatch = TaskBeginRegEx.Match(sourceLine);
-                    if (taskBeginMatch.Success)
-                    {
-                        var parentNumber = int.Parse(taskBeginMatch.Groups[4].Value);
-                        var title = taskBeginMatch.Groups[6].Value;
-                        currentTask = new Task
-                        {
-                            ParentNumber = parentNumber,
-                            Title = title
-                        };
-                        taskList.Add(title, currentTask);
-                    }
-                    else if (currentTask != null) // if no task found, ignore additional comments
-                    {
-                        var taskDescriptionMatch = TaskDescriptionRegEx.Match(sourceLine);
-                        if (taskDescriptionMatch.Success)
-                        {
-                            currentTask.Description.Add(taskDescriptionMatch.Groups[3].Value.Trim());
-                        }
-                        else
-                        {
-                            // there is a line not starting with /// => task description is completed
-                            currentTask = null;
-                        }
-                    }
-                }
+                var encodedTitle = match.Groups[1].Value;
+                Title = System.Net.WebUtility.UrlDecode(encodedTitle);
             }
-            return taskList;
+        }
+    }
+
+    public class Card
+    {
+        public string Id { get; set; }
+        public int Number { get; set; }
+        public string Title { get; set; }
+        public string Url { get; set; }
+    }
+
+    public class TrelloConnector
+    {
+        private readonly string _apiToken;
+        private readonly string _apiKey;
+        private readonly HttpClient _httpClient = new HttpClient();
+        private readonly string _authenticationParameters;
+        private readonly string _baseAddress = "https://api.trello.com/1";
+
+        public TrelloConnector(string apiKey,string apiToken)
+        {
+            _apiKey = apiKey;
+            _apiToken = apiToken;
+            //_httpClient.BaseAddress = new Uri("https://api.trello.com/1");
+            _authenticationParameters = $"?key={_apiKey}&token={_apiToken}";
+        }
+
+        private T GetContentFromTrello<T>(string queryUrl,Func<string,T> processingFunction)
+        {
+            var response = _httpClient.GetAsync($"{_baseAddress}/{queryUrl}{_authenticationParameters}");
+            // since we have a console application, there is no need for async processing
+            response.Wait();
+            if (response.Result.IsSuccessStatusCode)
+            {
+                var readContent = response.Result.Content.ReadAsStringAsync();
+                readContent.Wait();
+                var result = processingFunction(readContent.Result);
+                return result;
+            }
+            else
+            {
+                WriteLine($"Error while requesting url '{queryUrl}': {response.Result.ReasonPhrase}");
+                return default(T);
+            }
+        }
+
+        public List<Card> GetCardsOfBoard(string boardId)
+        {
+            var result = GetContentFromTrello<List<Card>>(
+                $"boards/{boardId}/cards",
+                x => JArray.Parse(x)
+                        .Children<JObject>()
+                        .Select(c =>
+                                new Card
+                                {
+                                    Id = c["id"].ToString(),
+                                    Title = c["name"].ToString(),
+                                    Number = (int)c["idShort"],
+                                    Url = c["url"].ToString()
+                                })
+                .ToList());
+            return result;
+        }
+
+        public string GetBoardByName(string userName, string boardName)
+        {
+            var result = GetContentFromTrello<string>(
+                $"/members/{userName}/boards",
+                x =>
+            {
+                var boards = JArray.Parse(x);
+                var board = boards
+                    .Children<JObject>()
+                    .FirstOrDefault(b => b.ContainsKey("name") && b["name"].ToString() == boardName);
+                if (board == null)
+                {
+                    WriteLine($"Board with name {boardName} was not found");
+                    return null;
+                }
+                return board["id"].ToString();
+            });
+            return result;
+        }
+
+        public List<Attachment> GetAttachmentUrlsForCard(string cardId)
+        {
+            var result = GetContentFromTrello<List<Attachment>>(
+                $"/cards/{cardId}/attachments",
+                x =>
+                {
+                    var attachments = JArray.Parse(x);
+                    var attachmentLinks = attachments
+                        .Children<JObject>()
+                        .Where(a => !(bool)a["isUpload"])
+                    .Select(a => new Attachment(a["url"].ToString()))
+                        .ToList();
+                    return attachmentLinks;
+
+                });
+            return result;
         }
     }
 }
