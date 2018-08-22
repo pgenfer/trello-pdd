@@ -9,7 +9,7 @@ namespace trello_pdd
     public class SourceParser
     {
         private readonly Regex TaskBeginRegEx =
-            new Regex(@"(\s*)\/\/\/(\s*)TODO(\s*)(\d+):(\s*)(.*)(\s*)",
+            new Regex(@"\s*\/\/\/\s*TODO\s*(\d*):\s*(.*)\s*",
                       RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private readonly Regex TaskDescriptionRegEx =
             new Regex(@"(\s*)\/\/\/(\s*)(.*)(\s*)",
@@ -34,8 +34,12 @@ namespace trello_pdd
                     var taskBeginMatch = TaskBeginRegEx.Match(sourceLine);
                     if (taskBeginMatch.Success)
                     {
-                        var parentNumber = int.Parse(taskBeginMatch.Groups[4].Value);
-                        var title = taskBeginMatch.Groups[6].Value;
+                        // check if we have a parent number, if not
+                        // the task will be a root task
+                        var parentNumber = taskBeginMatch.Groups[1].Length > 0 ?
+                                                         (int?)int.Parse(taskBeginMatch.Groups[1].Value) :
+                                                         null;
+                        var title = taskBeginMatch.Groups[2].Value;
                         currentTask = new Task
                         {
                             ParentNumber = parentNumber,
