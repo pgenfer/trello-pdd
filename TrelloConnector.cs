@@ -14,6 +14,7 @@
         private readonly HttpClient _httpClient = new HttpClient();
         private readonly string _authenticationParameters;
         private readonly string _baseAddress = "https://api.trello.com/1";
+        private List<Label> _labels = new List<Label>();
 
         public TrelloConnector(string apiKey, string apiToken)
         {
@@ -58,6 +59,23 @@
                               })
               .ToList());
           return result;
+        }
+
+        public void LoadLabelsOfBoard(string boardId)
+        {
+            var result = GetContentFromTrello(
+                $"boards/{boardId}/labels",
+                x => JArray.Parse(x)
+                        .Children<JObject>()
+                        .Select(l =>
+                                new Label
+                                {
+                                    Id = l["id"].ToString(),
+                                    Name = l["name"].ToString()
+
+                                })
+                        .ToList());
+            this._labels = result;
         }
 
         public string GetBoardByName(string userName, string boardName)
@@ -132,6 +150,29 @@
               Number = (int) newCardJson["idShort"],
               Url = newCardJson["url"].ToString()
             };
+
+                // after the card is created, try to add the labels to it
+                if(!string.IsNullOrEmpty(task.Label))
+                {
+                    var label = this._labels.FirstOrDefault(x => string.Compare(x.Name, task.Label, true) == 0);
+                    if(label != null)
+                    {
+                        response = _httpClient.PostAsync($"{_baseAddress}/cards/{newCard.Id}/labels?value={label.Id}&{_authenticationParameters}", null);
+                        response.Wait();
+                        if(response.Result.IsSuccessStatusCode)
+                        {
+                            WriteLine($"Label '{task.Label}' was added to card '{newCard.Title}'");    
+                        }
+                        else
+                        {
+                            WriteLine($"Error while writing label '{task.Label}': {response.Result.ReasonPhrase}");
+                        }
+                    }
+                    else
+                    {
+                        WriteLine($"Label '{task.Label}' was not found in Trello. Maybe a typo?");
+                    }
+                }
             return newCard;
           }
           else

@@ -90,6 +90,9 @@
 
           var listId = trelloConnection.GetListIdByBoardAndName(boardId, configuration.ListName);
 
+            // before processing, ensure that we have loaded all labels available in the board
+            trelloConnection.LoadLabelsOfBoard(boardId);
+
           foreach (var subTaskToCreate in subTasksToCreate)
           {
             if (subTaskToCreate.Value.Count > 0)

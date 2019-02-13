@@ -12,5 +12,9 @@ namespace trello_pdd
         // It also seems that trello removes "." within the string. It should be checked if further characters are also removed.
         public string TitleWithoutWhiteSpace => Title.Trim().Replace(" ", "-").Replace(".","");
         public override string ToString() => Title;
+        /// <summary>
+        /// optional label that should be set when task is stored in Trello
+        /// </summary>
+        public string Label;
     }
 }
