@@ -157,7 +157,7 @@
                     var label = this._labels.FirstOrDefault(x => string.Compare(x.Name, task.Label, true) == 0);
                     if(label != null)
                     {
-                        response = _httpClient.PostAsync($"{_baseAddress}/cards/{newCard.Id}/labels?value={label.Id}&{_authenticationParameters}", null);
+                        response = _httpClient.PostAsync($"{_baseAddress}/cards/{newCard.Id}/idLabels?value={label.Id}&{_authenticationParameters}", null);
                         response.Wait();
                         if(response.Result.IsSuccessStatusCode)
                         {

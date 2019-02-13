@@ -73,7 +73,7 @@
               foreach (var attachment in attachments)
               {
                 if (string.Compare(
-                        attachment.Title.Trim(),
+                        attachment.Title?.Trim(),
                         subTask.TitleWithoutWhiteSpace, StringComparison.OrdinalIgnoreCase) == 0)
                 {
                   WriteLine($"\t'{subTask.Title}' already added => Skipped.");

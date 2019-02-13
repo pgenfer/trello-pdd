@@ -10,7 +10,11 @@ namespace trello_pdd
         public string DescriptionText => string.Join(" ", Description);
         // Trello replaces whitespaces in card URLs with "-", so we should also do this here for later matching
         // It also seems that trello removes "." within the string. It should be checked if further characters are also removed.
-        public string TitleWithoutWhiteSpace => Title.Trim().Replace(" ", "-").Replace(".","");
+        public string TitleWithoutWhiteSpace => Title.Trim()
+                                                     .Replace(" ", "-")
+                                                     .Replace(".","")
+                                                     .Replace(",","")
+                                                     .Replace("\"","");
         public override string ToString() => Title;
         /// <summary>
         /// optional label that should be set when task is stored in Trello
