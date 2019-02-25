@@ -1,6 +1,10 @@
 # trello-pdd
 A cmd line tool for [puzzle driven development](https://www.yegor256.com/2010/03/04/pdd.html) with [Trello](https://trello.com/).
 
+![A trello board with cards created by trello-pd](/images/trello-pd.png?raw=true "Optional Title")
+
+## The problem
+
 During my work on side projects, I quite often encounter the following difficulties:
 
  - not knowing where to continue after a longer break
@@ -28,5 +32,28 @@ In that way the two major issues mentioned at the beginning are solved:
 
 ## Implementation
 
-trello-pdd is a tool that tries to support the developer with this approach. The idea is that 
+trello-pdd is a simple command line tool that tries to support the developer with this approach. The idea is to simply add descriptions of new tasks in your code as documentation:
+
+```javascript
+/// TODO 52: Adjust the size of the text box for connections.
+/// Currently the textbox for connection names is too small and also placed wrongly.
+/// It should also be checked if some of the hardcoded widths/heights in the connection
+/// can somehow be replaced by variables.
+```
+When trello-pd parsed your source code and finds a comment of the given form, it does the following:
+ 1. it connects to your Trello board
+ 2. It checks if there is a card with the number ```52```
+ 3. If the card exists, a new card will be created and linked to card ```52``` (the parent card)
+ 4. The additional text in the comment will be added as description to the trello card.
+ 
+Currently, the following format is supported:
+
+```javascript
+/// TODO [parent card number] [label]: [title of card]
+/// [task description]
+```
+
+In case the parent card number is omitted, trello-pd will create a new root card.
+
+The list were the cards should be added can be set via configuration file.
 
