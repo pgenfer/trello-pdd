@@ -40,7 +40,7 @@ trello-pdd is a simple command line tool that tries to support the developer wit
 /// It should also be checked if some of the hardcoded widths/heights in the connection
 /// can somehow be replaced by variables.
 ```
-When trello-pd parsed your source code and finds a comment of the given form, it does the following:
+When trello-pdd parsed your source code and finds a comment of the given form, it does the following:
  1. it connects to your Trello board
  2. It checks if there is a card with the number ```52```
  3. If the card exists, a new card will be created and linked to card ```52``` (the parent card)
@@ -53,10 +53,10 @@ Currently, the following format is supported:
 /// [task description]
 ```
 
-In case the parent card number is omitted, trello-pd will create a new root card.
+In case the parent card number is omitted, trello-pdd will create a new root card.
 The list were the cards should be added to can be set via configuration file.
 
-In case a card was already created for a given documentation, trello-pd will skip this task.
+In case a card was already created for a given documentation, trello-pdd will skip this task.
 
-![Execution of trello-pd](/images/cmd-line.png?raw=true "Optional Title")
+![Execution of trello-pdd](/images/cmd-line.png?raw=true "Optional Title")
 
