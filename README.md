@@ -54,6 +54,9 @@ Currently, the following format is supported:
 ```
 
 In case the parent card number is omitted, trello-pd will create a new root card.
+The list were the cards should be added to can be set via configuration file.
 
-The list were the cards should be added can be set via configuration file.
+In case a card was already created for a given documentation, trello-pd will skip this task.
+
+![Execution of trello-pd](/images/cmd-line.png?raw=true "Optional Title")
 
